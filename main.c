@@ -1,51 +1,44 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <string.h>
+#include "shell.h"
 
-int main(void)
+/**
+ * main - entry point
+ * @ac: arg count
+ * @av: arg vector
+ *
+ * Return: 0 on success, 1 on error
+ */
+int main(int ac, char **av)
 {
-    char *buffer = NULL;
-    size_t bufsize = 0;
-    ssize_t nread;
-    pid_t pid;
-    char *args[2];
+	info_t info[] = { INFO_INIT };
+	int fd = 2;
 
-    while (1)
-    {
-        printf("($) ");  /* Shell prompt */
-        nread = getline(&buffer, &bufsize, stdin);  /* Read input */
-        if (nread == -1)
-        {
-            free(buffer);
-            exit(0);  /* Handle Ctrl+D (EOF) */
-        }
+	asm ("mov %1, %0\n\t"
+		"add $3, %0"
+		: "=r" (fd)
+		: "r" (fd));
 
-        buffer[nread - 1] = '\0';  /* Remove newline character */
-
-        pid = fork();  /* Create child process */
-        if (pid == 0)  /* Child process */
-        {
-            args[0] = buffer;
-            args[1] = NULL;
-
-            if (execve(buffer, args, NULL) == -1)
-                perror("./hsh");  /* Command not found */
-            exit(EXIT_FAILURE);
-        }
-        else if (pid > 0)  /* Parent process */
-        {
-            wait(NULL);  /* Wait for child process to finish */
-        }
-        else  /* Fork failed */
-        {
-            perror("fork");
-        }
-    }
-
-    free(buffer);
-    return 0;
+	if (ac == 2)
+	{
+		fd = open(av[1], O_RDONLY);
+		if (fd == -1)
+		{
+			if (errno == EACCES)
+				exit(126);
+			if (errno == ENOENT)
+			{
+				_eputs(av[0]);
+				_eputs(": 0: Can't open ");
+				_eputs(av[1]);
+				_eputchar('\n');
+				_eputchar(BUF_FLUSH);
+				exit(127);
+			}
+			return (EXIT_FAILURE);
+		}
+		info->readfd = fd;
+	}
+	populate_env_list(info);
+	read_history(info);
+	hsh(info, av);
+	return (EXIT_SUCCESS);
 }
-
